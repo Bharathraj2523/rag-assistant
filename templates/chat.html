@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG Chat</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-light: #818cf8;
+            --background: #f8fafc;
+            --card: #ffffff;
+        }
+        
+        body {
+            background-color: var(--background);
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .chat-container {
+            height: calc(100vh - 160px);
+            background-color: var(--background);
+        }
+        
+        .message-user {
+            background-color: var(--card);
+            border-radius: 18px 18px 0 18px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        
+        .message-assistant {
+            background-color: rgba(79, 70, 229, 0.08);
+            border-radius: 18px 18px 18px 0;
+            color: #1e293b;
+        }
+        
+        .file-upload {
+            opacity: 0;
+            position: absolute;
+            z-index: -1;
+        }
+        
+        .typing-indicator span {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--primary);
+            margin: 0 2px;
+            animation: bounce 1.4s infinite ease-in-out;
+        }
+        
+        .typing-indicator span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+        
+        .typing-indicator span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+        
+        @keyframes bounce {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-5px); }
+        }
+        
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--primary);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+        
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        
+        .input-area {
+            background-color: var(--card);
+            border-top: 1px solid rgba(0,0,0,0.05);
+        }
+    </style>
+</head>
+<body>
+    <div class="container mx-auto px-4 py-6 max-w-4xl">
+        <!-- Toast Notification -->
+        <div id="toast" class="toast"></div>
+
+        <!-- Header -->
+        <header class="flex justify-between items-center mb-6">
+            <h1 class="text-2xl font-bold text-gray-800 flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                </svg>
+                Document Assistant
+            </h1>
+            <a href="/" class="text-indigo-600 hover:text-indigo-800 flex items-center text-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 1 0 010 1.414z" clip-rule="evenodd" />
+                </svg>
+                Back to Home
+            </a>
+        </header>
+
+        <!-- Chat Area -->
+        <div class="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
+            <div class="p-4 chat-container overflow-y-auto" id="chat-messages">
+                <!-- Messages will appear here -->
+                <div class="text-center text-gray-400 py-10 flex flex-col items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mb-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                    <p>Upload documents to get started</p>
+                    <p class="text-sm mt-1">Supports PDF and TXT files</p>
+                </div>
+            </div>
+
+            <!-- Input Area -->
+            <div class="input-area p-4">
+                <form id="chat-form" class="flex items-end gap-2">
+                    <div class="flex-1 relative">
+                        <label for="file-upload" class="absolute left-3 bottom-3 cursor-pointer text-gray-500 hover:text-indigo-600 transition">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                            </svg>
+                        </label>
+                        <input type="file" id="file-upload" class="file-upload" accept=".pdf,.txt">
+                        <textarea id="message-input" rows="1" class="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent" placeholder="Ask something about your documents..."></textarea>
+                    </div>
+                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white p-3 rounded-lg transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                        </svg>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const chatForm = document.getElementById('chat-form');
+            const messageInput = document.getElementById('message-input');
+            const chatMessages = document.getElementById('chat-messages');
+            const fileUpload = document.getElementById('file-upload');
+            const toast = document.getElementById('toast');
+
+            // Auto-resize textarea
+            messageInput.addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = (this.scrollHeight) + 'px';
+            });
+
+            // Show toast notification
+            function showToast(message, isError = false) {
+                toast.textContent = message;
+                toast.style.backgroundColor = isError ? '#ef4444' : '#4f46e5';
+                toast.classList.add('show');
+                
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 3000);
+            }
+
+            // Handle file upload
+            fileUpload.addEventListener('change', async function(e) {
+                if (e.target.files.length > 0) {
+                    const file = e.target.files[0];
+                    const fileName = file.name;
+                    const fileExt = fileName.split('.').pop().toLowerCase();
+                    
+                    if (fileExt !== 'pdf' && fileExt !== 'txt') {
+                        showToast('Only PDF and TXT files are supported', true);
+                        return;
+                    }
+
+                    // Show uploading message
+                    addMessage('user', `Uploading ${fileName}...`, true);
+                    
+                    try {
+                        const formData = new FormData();
+                        formData.append('file', file);
+                        
+                        const response = await fetch('/upload', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        if (response.ok) {
+                            showToast('File uploaded successfully!');
+                            addMessage('assistant', `I've processed "${fileName}". Ask me anything about it!`);
+                        } else {
+                            const error = await response.text();
+                            showToast('Upload failed: ' + error, true);
+                        }
+                    } catch (error) {
+                        showToast('Upload failed: ' + error.message, true);
+                    }
+                }
+            });
+
+            // Handle chat form submission
+            chatForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                const message = messageInput.value.trim();
+                if (message) {
+                    addMessage('user', message);
+                    messageInput.value = '';
+                    messageInput.style.height = 'auto';
+                    
+                    // Show typing indicator
+                    const typingId = showTypingIndicator();
+                    
+                    try {
+                        const response = await fetch('/chat_api', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                message: message
+                            })
+                        });
+                        
+                        const data = await response.json();
+                        removeTypingIndicator(typingId);
+                        
+                        if (response.ok) {
+                            // Display the latest response
+                            const lastMessage = data.history[data.history.length - 1];
+                            addMessage(lastMessage.role, lastMessage.content);
+                        } else {
+                            showToast('Error processing your question', true);
+                        }
+                    } catch (error) {
+                        removeTypingIndicator(typingId);
+                        showToast('Network error', true);
+                    }
+                }
+            });
+
+            function addMessage(role, content, isUpload = false) {
+                // Clear initial state if it exists
+                if (chatMessages.children.length === 1 && chatMessages.children[0].classList.contains('text-center')) {
+                    chatMessages.innerHTML = '';
+                }
+
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `flex mb-4 ${role === 'user' ? 'justify-end' : 'justify-start'}`;
+                
+                const contentDiv = document.createElement('div');
+                contentDiv.className = `max-w-xs md:max-w-md lg:max-w-lg px-4 py-2 ${role === 'user' ? 'message-user' : 'message-assistant'}`;
+                if (isUpload) contentDiv.classList.add('italic');
+                
+                contentDiv.textContent = content;
+                messageDiv.appendChild(contentDiv);
+                
+                chatMessages.appendChild(messageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+
+            function showTypingIndicator() {
+                const typingDiv = document.createElement('div');
+                typingDiv.className = 'flex mb-4 justify-start';
+                typingDiv.id = 'typing-indicator';
+                
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'message-assistant px-4 py-2 typing-indicator';
+                contentDiv.innerHTML = '<span></span><span></span><span></span>';
+                
+                typingDiv.appendChild(contentDiv);
+                chatMessages.appendChild(typingDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+                
+                return 'typing-indicator';
+            }
+
+            function removeTypingIndicator(id) {
+                const typingElement = document.getElementById(id);
+                if (typingElement) {
+                    typingElement.remove();
+                }
+            }
+        });
+    </script>
+</body>
+</html>

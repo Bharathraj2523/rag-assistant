@@ -1,0 +1,10 @@
+streamlit
+PyMuPDF
+langchain
+tiktoken
+sentence-transformers
+google-generativeai
+python-dotenv
+faiss-cpu
+numpy
+flask
